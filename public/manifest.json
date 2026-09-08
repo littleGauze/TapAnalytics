@@ -1,0 +1,16 @@
+{
+  "name": "TapAnalytics",
+  "short_name": "TapAnalytics",
+  "description": "TapTap 开发者数据助手",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B1016",
+  "theme_color": "#00C4CD",
+  "icons": [
+    {
+      "src": "/app-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
