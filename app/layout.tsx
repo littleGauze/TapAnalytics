@@ -1,13 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { Noto_Sans_SC } from 'next/font/google';
 import { AppProviders } from '@/components/AppProviders';
 import './globals.css';
-
-const body = Noto_Sans_SC({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: 'TapAnalytics · 数据指挥中心',
@@ -28,7 +21,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN" className={body.className}>
+    <html lang="zh-CN">
       <body>
         <AppProviders>{children}</AppProviders>
       </body>
