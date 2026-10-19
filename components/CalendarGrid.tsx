@@ -10,12 +10,13 @@ import ChevronRight from '@mui/icons-material/ChevronRight';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { currentMonthStr, monthLabel, todayStr } from '@/lib/dates';
+import { computeMeanArpu, dayRevenueView } from '@/lib/estimate';
 import { fmt, fmtInt } from '@/lib/format';
 import type { DailyRecord } from '@/lib/types';
 
 const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
 
-function shiftMonth(ym: string, delta: number): string {
+export function shiftMonth(ym: string, delta: number): string {
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -27,12 +28,17 @@ export function CalendarGrid({
   dailyList,
   onMonthChange,
   onSelectDay,
+  hideHeader = false,
+  bare = false,
 }: {
   month: string;
   earliestMonth: string;
   dailyList: DailyRecord[];
   onMonthChange: (ym: string) => void;
   onSelectDay: (date: string, rec: DailyRecord | null) => void;
+  hideHeader?: boolean;
+  /** 去掉外层 Card，便于嵌入父级容器 */
+  bare?: boolean;
 }) {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('sm'), { noSsr: true });
@@ -41,6 +47,7 @@ export function CalendarGrid({
   let first = new Date(year, mon - 1, 1).getDay();
   first = (first + 6) % 7;
   const today = todayStr();
+  const meanArpu = computeMeanArpu(dailyList);
   const map: Record<string, DailyRecord> = {};
   dailyList.forEach((d) => {
     map[d.date] = d;
@@ -62,24 +69,26 @@ export function CalendarGrid({
   const canPrev = month > earliestMonth;
   const canNext = month < currentMonthStr();
 
-  return (
-    <Card sx={{ p: { xs: 1, sm: 1.5 } }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 0.5, mb: 1 }}>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            03 · 每日日历
-          </Typography>
-          <Typography fontWeight={700}>{monthLabel(month)}</Typography>
-        </Box>
-        <Stack direction="row">
-          <IconButton size="small" disabled={!canPrev} onClick={() => onMonthChange(shiftMonth(month, -1))}>
-            <ChevronLeft />
-          </IconButton>
-          <IconButton size="small" disabled={!canNext} onClick={() => onMonthChange(shiftMonth(month, 1))}>
-            <ChevronRight />
-          </IconButton>
+  const body = (
+    <>
+      {hideHeader ? null : (
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 0.5, mb: 1 }}>
+          <Box>
+            <Typography variant="caption" color="text.secondary">
+              03 · 每日日历
+            </Typography>
+            <Typography fontWeight={700}>{monthLabel(month)}</Typography>
+          </Box>
+          <Stack direction="row">
+            <IconButton size="small" disabled={!canPrev} onClick={() => onMonthChange(shiftMonth(month, -1))}>
+              <ChevronLeft />
+            </IconButton>
+            <IconButton size="small" disabled={!canNext} onClick={() => onMonthChange(shiftMonth(month, 1))}>
+              <ChevronRight />
+            </IconButton>
+          </Stack>
         </Stack>
-      </Stack>
+      )}
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.4, mb: 0.6 }}>
         {WEEK.map((w) => (
           <Typography key={w} variant="caption" color="text.secondary" textAlign="center" fontWeight={700}>
@@ -91,8 +100,8 @@ export function CalendarGrid({
         {cells.map((c, i) => {
           if (!c.date) return <Box key={`b${i}`} />;
           const rec = c.rec;
-          const conv =
-            rec?.revenue != null && rec.dau > 0 ? `${((rec.revenue / rec.dau) * 100).toFixed(0)}%` : '—';
+          const view = dayRevenueView(rec, meanArpu);
+          const conv = view.arpuPct == null ? '—' : `${view.arpuPct.toFixed(0)}%`;
           return (
             <Box
               key={c.date}
@@ -115,17 +124,31 @@ export function CalendarGrid({
                 <Typography variant="caption" display="block">
                   ·
                 </Typography>
-              ) : c.today && rec?.revenue == null ? (
-                <Typography variant="caption" display="block">
-                  待更新
+              ) : view.value == null ? (
+                <Typography variant="caption" display="block" sx={{ opacity: 0.85 }}>
+                  {c.today ? '待更新' : '未同步'}
                 </Typography>
               ) : (
                 <>
-                  <Typography className="tabular" sx={{ fontSize: mobile ? 10 : 12, fontWeight: 700, lineHeight: 1.2 }}>
-                    {rec?.revenue == null ? '未同步' : `¥${fmt(rec.revenue)}`}
+                  <Typography
+                    className="tabular"
+                    sx={{
+                      fontSize: mobile ? 10 : 12,
+                      fontWeight: 700,
+                      lineHeight: 1.2,
+                      opacity: view.isEst ? 0.82 : 1,
+                    }}
+                  >
+                    ¥{fmt(view.value)}
                   </Typography>
                   <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.8 }}>
-                    {fmtInt(rec?.dau)} · {conv}
+                    {view.isEst ? (
+                      <>预估 · {fmtInt(rec?.dau)}</>
+                    ) : (
+                      <>
+                        {fmtInt(rec?.dau)} · {conv}
+                      </>
+                    )}
                   </Typography>
                 </>
               )}
@@ -133,6 +156,9 @@ export function CalendarGrid({
           );
         })}
       </Box>
-    </Card>
+    </>
   );
+
+  if (bare) return body;
+  return <Card sx={{ p: { xs: 1, sm: 1.5 } }}>{body}</Card>;
 }

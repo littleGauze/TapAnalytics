@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -11,16 +11,30 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import ArrowBack from '@mui/icons-material/ArrowBack';
+import ChevronLeft from '@mui/icons-material/ChevronLeft';
+import ChevronRight from '@mui/icons-material/ChevronRight';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { CalendarGrid } from './CalendarGrid';
+import { CalendarGrid, shiftMonth } from './CalendarGrid';
 import { DayDetailDialog } from './DayDetailDialog';
 import { MomChip } from './MomChip';
 import { RemoteAvatar } from './RemoteAvatar';
-import { currentMonthStr } from '@/lib/dates';
+import { TrendChart } from './TrendChart';
+import { ViewSwitch, type DetailViewMode } from './ViewSwitch';
+import { currentMonthStr, monthLabel, todayStr } from '@/lib/dates';
+import { computeMeanArpu, dayRevenueView } from '@/lib/estimate';
 import { fmt, fmtInt, rateText } from '@/lib/format';
 import { computeMonthProjection } from '@/lib/projection';
 import type { DailyRecord, GameOverview, OverallMetrics } from '@/lib/types';
+
+type OverviewTile = {
+  tag: string;
+  value: string;
+  meta?: string;
+  mom?: ReactNode;
+  span?: boolean;
+  est?: boolean;
+};
 
 export function GameDetailView({ appId }: { appId: string }) {
   const router = useRouter();
@@ -38,6 +52,7 @@ export function GameDetailView({ appId }: { appId: string }) {
   const [monthTotal, setMonthTotal] = useState<number | null>(null);
   const [monthDau, setMonthDau] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<DetailViewMode>('calendar');
 
   useEffect(() => {
     try {
@@ -76,14 +91,28 @@ export function GameDetailView({ appId }: { appId: string }) {
     overview?.monthRevenue != null
       ? computeMonthProjection(overview.monthRevenueList, overview.monthRevenue)
       : null;
+  const meanArpu = computeMeanArpu(dailyList);
   const pickedRec = picked ? dailyList.find((d) => d.date === picked) || null : null;
+  const todayRec = dailyList.find((d) => d.date === todayStr()) || null;
+  const todayEst = dayRevenueView(todayRec, meanArpu);
+  const showTodayEst = month === currentMonthStr() && todayEst.isEst && todayEst.value != null;
   const conv =
     overview && overview.yesterdayRevenue != null && overview.yesterdayDAU > 0
       ? (overview.yesterdayRevenue / overview.yesterdayDAU) * 100
       : null;
   const monthConv = monthTotal != null && monthDau > 0 ? (monthTotal / monthDau) * 100 : null;
 
-  const tiles = [
+  const tiles: OverviewTile[] = [
+    ...(showTodayEst && todayEst.value != null
+      ? [
+          {
+            tag: '今日 · 预估收益',
+            value: `¥${fmt(todayEst.value)}`,
+            meta: `均值转化 ${(todayEst.arpuPct || 0).toFixed(1)}% · 活跃 ${fmtInt(todayRec?.dau)}`,
+            est: true,
+          },
+        ]
+      : []),
     {
       tag: '昨日 · 广告收益',
       value: overview?.yesterdayRevenue == null ? '暂无' : `¥${fmt(overview.yesterdayRevenue)}`,
@@ -183,6 +212,9 @@ export function GameDetailView({ appId }: { appId: string }) {
                 p: 1.5,
                 gridColumn: mobile && t.span ? '1 / -1' : 'auto',
                 minHeight: 96,
+                border: t.est ? 1 : 0,
+                borderColor: t.est ? 'divider' : 'transparent',
+                borderStyle: t.est ? 'dashed' : 'solid',
               }}
             >
               <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -191,7 +223,10 @@ export function GameDetailView({ appId }: { appId: string }) {
                 </Typography>
                 {t.mom}
               </Stack>
-              <Typography className="tabular" sx={{ mt: 0.6, fontSize: { xs: 18, sm: 22 }, fontWeight: 700 }}>
+              <Typography
+                className="tabular"
+                sx={{ mt: 0.6, fontSize: { xs: 18, sm: 22 }, fontWeight: 700, opacity: t.est ? 0.88 : 1 }}
+              >
                 {loading ? <Skeleton width={90} /> : t.value}
               </Typography>
               {t.meta ? (
@@ -252,16 +287,56 @@ export function GameDetailView({ appId }: { appId: string }) {
           </Stack>
         </Card>
 
-        <CalendarGrid
-          month={month}
-          earliestMonth={earliestMonth}
-          dailyList={dailyList}
-          onMonthChange={setMonth}
-          onSelectDay={(date) => setPicked(date)}
-        />
+        <ViewSwitch value={viewMode} onChange={setViewMode} />
+
+        <Card sx={{ p: { xs: 1, sm: 1.5 } }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 0.5, mb: 1.2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {viewMode === 'calendar' ? '03 · 每日日历' : '03 · 趋势'}
+              </Typography>
+              <Typography fontWeight={700}>{monthLabel(month)}</Typography>
+            </Box>
+            <Stack direction="row">
+              <IconButton
+                size="small"
+                disabled={month <= earliestMonth}
+                onClick={() => setMonth(shiftMonth(month, -1))}
+              >
+                <ChevronLeft />
+              </IconButton>
+              <IconButton
+                size="small"
+                disabled={month >= currentMonthStr()}
+                onClick={() => setMonth(shiftMonth(month, 1))}
+              >
+                <ChevronRight />
+              </IconButton>
+            </Stack>
+          </Stack>
+
+          {viewMode === 'calendar' ? (
+            <CalendarGrid
+              month={month}
+              earliestMonth={earliestMonth}
+              dailyList={dailyList}
+              onMonthChange={setMonth}
+              onSelectDay={(date) => setPicked(date)}
+              hideHeader
+              bare
+            />
+          ) : (
+            <TrendChart dailyList={dailyList} meanArpu={meanArpu} bare />
+          )}
+        </Card>
       </Box>
 
-      <DayDetailDialog date={picked} rec={pickedRec} onClose={() => setPicked(null)} />
+      <DayDetailDialog
+        date={picked}
+        rec={pickedRec}
+        meanArpu={meanArpu}
+        onClose={() => setPicked(null)}
+      />
     </Box>
   );
 }
