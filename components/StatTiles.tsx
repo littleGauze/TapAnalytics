@@ -30,6 +30,9 @@ export function StatTiles({ games, metrics, loading }: Props) {
       .filter((v): v is number => typeof v === 'number');
 
   const today = values('todayRevenue').reduce((s, v) => s + v, 0);
+  const todayEstimated = values('todayEstimatedRevenue').reduce((sum, value) => sum + value, 0);
+  const todayEstimatedGot = values('todayEstimatedRevenue').length;
+  const metricsLoading = loading || published.some((game) => !metrics[game.appId]);
   const month = values('monthRevenue').reduce((s, v) => s + v, 0);
   const total = values('totalRevenue').reduce((s, v) => s + v, 0);
   const todayGot = values('todayRevenue').length;
@@ -58,6 +61,16 @@ export function StatTiles({ games, metrics, loading }: Props) {
       span: true,
     },
     {
+      key: 'todayEstimated',
+      tag: '今日预估总收益',
+      value: todayEstimatedGot ? `¥${fmt(todayEstimated)}` : metricsLoading ? null : '暂无',
+      meta: published.length
+        ? `${todayEstimatedGot}/${published.length} 个项目可预估 · 按本月均值转化率估算`
+        : '暂无可预估项目',
+      accent: false,
+      span: false,
+    },
+    {
       key: 'today',
       tag: '昨日广告收益',
       value: todayGot ? `¥${fmt(today)}` : loading ? null : '暂无',
@@ -78,7 +91,7 @@ export function StatTiles({ games, metrics, loading }: Props) {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: mobile ? '1fr 1fr' : '1.2fr 1fr 1fr',
+          gridTemplateColumns: mobile ? '1fr 1fr' : '1.2fr 1fr 1fr 1fr',
           gap: 1.25,
         }}
       >

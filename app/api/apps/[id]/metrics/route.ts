@@ -3,6 +3,7 @@ import { currentAccount } from '@/lib/store';
 import { developerIdOf } from '@/lib/api';
 import { taptapFetch, TAPTAP_ORIGIN } from '@/lib/taptap';
 import { dayBeforeStr, lastMonthSameDayRange, monthStartStr, todayStr, yesterdayStr } from '@/lib/dates';
+import { computeMeanArpu } from '@/lib/estimate';
 import type { GameMetrics, RevenuePoint } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -37,12 +38,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     const dayBefore = dayBeforeStr();
     const today = todayStr();
     const monthStart = monthStartStr();
+    const deviceStart = monthStart < dayBefore ? monthStart : dayBefore;
     const lm = lastMonthSameDayRange();
     const q = `developer_id=${developerId}&app_id=${appId}`;
 
     const [rev2d, dau2d, monthRev, lastMonthRev, totalRev, pos2d] = await Promise.all([
       getJson(`/api/mini-app/v1/ad/payout-report-data?${q}&start_time=${dayBefore}&end_time=${yesterday}`, cookie),
-      getJson(`/api/mini-app/v1/stats-by-day/device?${q}&start_date=${dayBefore}&end_date=${yesterday}`, cookie),
+      getJson(`/api/mini-app/v1/stats-by-day/device?${q}&start_date=${deviceStart}&end_date=${today}`, cookie),
       getJson(`/api/mini-app/v1/ad/payout-report-data?${q}&start_time=${monthStart}&end_time=${today}`, cookie),
       getJson(`/api/mini-app/v1/ad/payout-report-data?${q}&start_time=${lm.start}&end_time=${lm.end}`, cookie),
       getJson(`/api/mini-app/v1/ad/payout-report-data?${q}&start_time=2020-01-01&end_time=${yesterday}`, cookie),
@@ -60,9 +62,24 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     const month = parseRevenue(monthRev);
     const lastMonth = parseRevenue(lastMonthRev);
     const total = parseRevenue(totalRev);
+    const currentDau = dauList.find((record: any) => record.date === today);
+    const todayActiveDevices = currentDau ? Number(currentDau.active_device_num) || 0 : null;
+    const devicesByDate = new Map<string, number>(
+      dauList.map((record: any) => [String(record.date), Number(record.active_device_num) || 0]),
+    );
+    const meanArpu = computeMeanArpu(
+      month.list.filter((record) => record.date < today).map((record) => ({
+        ...record,
+        dau: devicesByDate.get(record.date) || 0,
+        newUsers: 0,
+      })),
+    );
 
     const metrics: GameMetrics = {
       appId,
+      todayActiveDevices,
+      todayEstimatedRevenue:
+        todayActiveDevices != null && meanArpu != null ? todayActiveDevices * meanArpu : null,
       todayRevenue: r2.total == null ? null : yItem ? yItem.revenue : 0,
       prevDayRevenue: dItem ? dItem.revenue : null,
       monthRevenue: month.total,

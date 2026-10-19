@@ -70,6 +70,15 @@ export function AppShell({
               <Settings />
             </IconButton>
           ) : null}
+          <Button
+            size="small"
+            onClick={async () => {
+              const response = await fetch('/api/access', { method: 'DELETE' });
+              if (response.ok) window.location.replace('/access');
+            }}
+          >
+            退出
+          </Button>
         </Toolbar>
       </AppBar>
 

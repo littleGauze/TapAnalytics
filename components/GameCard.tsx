@@ -83,6 +83,17 @@ export function GameCard({
         >
           <Metric
             loading={loading}
+            value={metrics?.todayEstimatedRevenue != null ? `¥${fmt(metrics.todayEstimatedRevenue)}` : '—'}
+            label="今日预估收益"
+            sub="按本月均值转化率估算"
+          />
+          <Metric
+            loading={loading}
+            value={metrics?.todayActiveDevices != null ? fmtInt(metrics.todayActiveDevices) : '—'}
+            label="今日活跃"
+          />
+          <Metric
+            loading={loading}
             value={metrics?.todayRevenue != null ? `¥${fmt(metrics.todayRevenue)}` : '—'}
             label={
               <>

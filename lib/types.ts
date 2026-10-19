@@ -58,6 +58,8 @@ export interface Game {
 
 export interface GameMetrics {
   appId: string;
+  todayActiveDevices: number | null;
+  todayEstimatedRevenue: number | null;
   todayRevenue: number | null;
   prevDayRevenue: number | null;
   monthRevenue: number | null;
